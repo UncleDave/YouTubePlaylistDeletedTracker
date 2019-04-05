@@ -5,8 +5,22 @@
   "background": {
     "scripts": [
       "background.js"
-    ],
-    "persistent": false
+    ]
   },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://www.youtube.com/*"
+      ],
+      "js": [
+        "content.js"
+      ]
+    }
+  ],
+  "permissions": [
+    "webRequest",
+    "storage",
+    "*://www.youtube.com/*"
+  ],
   "manifest_version": 2
 }

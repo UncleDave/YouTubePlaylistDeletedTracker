@@ -3,13 +3,22 @@ const requests = {},
   removeAction = 'ACTION_REMOVE_VIDEO_BY_VIDEO_ID';
 
 function onBeforeRequestCallback(request) {
-  const payload = request.requestBody.formData.sej[0];
+  const payload = JSON.parse(request.requestBody.formData.sej[0]);
   const action = payload.playlistEditEndpoint.actions[0];
-  let newRequest = { action: action.action, tabId: request.tabId, playlistId: payload.playlistEditEndpoint.playlistId };
+
+  const newRequest = {
+    action: action.action,
+    playlistId: payload.playlistEditEndpoint.playlistId
+  };
 
   switch (action.action) {
     case addAction:
       newRequest.videoId = action.addedVideoId;
+      newRequest.videoName = new Promise(resolve => {
+        chrome.tabs.sendMessage(request.tabId, { videoId: action.addedVideoId }, messageResponse => {
+          resolve(messageResponse.videoName);
+        });
+      });
       break;
     case removeAction:
       newRequest.videoId = action.removedVideoId;
@@ -27,24 +36,26 @@ function onCompletedCallback(response) {
   if (response.statusCode !== 200 || !request)
     return;
 
-  chrome.tabs.sendMessage(request.tabId, { videoId: request.videoId }, messageResponse => {
-    const storageKey = `Playlist:${request.playlistId}`;
+  const storageKey = `playlist:${request.playlistId}`;
 
-    chrome.storage.sync.get(storageKey, items => {
-      const videos = items[storageKey] || {};
+  chrome.storage.sync.get(storageKey, items => {
+    const videos = items[storageKey] || {};
 
-      switch (request.action) {
-        case addAction:
-          videos[request.videoId] = { name: messageResponse.videoName };
-          break;
-        case removeAction:
-          delete videos[request.videoId];
-          break;
-      }
-
-      chrome.storage.sync.set({ [storageKey]: videos });
-    });
+    switch (request.action) {
+      case addAction:
+        request.videoName.then(name => {
+          videos[request.videoId] = name;
+          chrome.storage.sync.set({ [storageKey]: videos });
+        });
+        break;
+      case removeAction:
+        delete videos[request.videoId];
+        chrome.storage.sync.set({ [storageKey]: videos });
+        break;
+    }
   });
+
+  delete requests[response.requestId];
 }
 
 const webRequestFilter = {
