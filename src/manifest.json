@@ -13,13 +13,15 @@
         "*://www.youtube.com/*"
       ],
       "js": [
-        "content.js"
+        "title-grabber.content.js",
+        "playlist.content.js"
       ]
     }
   ],
   "permissions": [
     "webRequest",
     "storage",
+    "webNavigation",
     "*://www.youtube.com/*"
   ],
   "manifest_version": 2

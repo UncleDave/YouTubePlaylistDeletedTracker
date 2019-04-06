@@ -2,7 +2,7 @@ const requests = {},
   addAction = 'ACTION_ADD_VIDEO',
   removeAction = 'ACTION_REMOVE_VIDEO_BY_VIDEO_ID';
 
-function onBeforeRequestCallback(request) {
+function onBeforePlaylistEditRequestCallback(request) {
   const payload = JSON.parse(request.requestBody.formData.sej[0]);
   const action = payload.playlistEditEndpoint.actions[0];
 
@@ -30,27 +30,22 @@ function onBeforeRequestCallback(request) {
   requests[request.requestId] = newRequest;
 }
 
-function onCompletedCallback(response) {
+function onPlaylistEditCompletedCallback(response) {
   const request = requests[response.requestId];
 
   if (response.statusCode !== 200 || !request)
     return;
 
-  const storageKey = `playlist:${request.playlistId}`;
-
-  chrome.storage.sync.get(storageKey, items => {
-    const videos = items[storageKey] || {};
-
+  chrome.storage.sync.get(videos => {
     switch (request.action) {
       case addAction:
         request.videoName.then(name => {
-          videos[request.videoId] = name;
-          chrome.storage.sync.set({ [storageKey]: videos });
+          if (!videos[request.videoId])
+            chrome.storage.sync.set({ [request.videoId]: name });
         });
         break;
       case removeAction:
-        delete videos[request.videoId];
-        chrome.storage.sync.set({ [storageKey]: videos });
+        chrome.storage.sync.remove(request.videoId);
         break;
     }
   });
@@ -58,7 +53,11 @@ function onCompletedCallback(response) {
   delete requests[response.requestId];
 }
 
-const webRequestFilter = {
+function sendRefreshMessage(details) {
+  chrome.tabs.sendMessage(details.tabId, { refresh: true });
+}
+
+const playlistEditWebRequestFilter = {
   urls: [
     '*://www.youtube.com/service_ajax?name=playlistEditEndpoint'
   ],
@@ -67,5 +66,14 @@ const webRequestFilter = {
   ]
 };
 
-chrome.webRequest.onBeforeRequest.addListener(onBeforeRequestCallback, webRequestFilter, ['requestBody']);
-chrome.webRequest.onCompleted.addListener(onCompletedCallback, webRequestFilter);
+const navigationFilter = {
+  url: [{
+    pathEquals: '/playlist'
+  }]
+};
+
+chrome.webRequest.onBeforeRequest.addListener(onBeforePlaylistEditRequestCallback, playlistEditWebRequestFilter, ['requestBody']);
+chrome.webRequest.onCompleted.addListener(onPlaylistEditCompletedCallback, playlistEditWebRequestFilter);
+
+chrome.webNavigation.onHistoryStateUpdated.addListener(sendRefreshMessage, navigationFilter);
+chrome.webNavigation.onCompleted.addListener(sendRefreshMessage, navigationFilter);
